@@ -28,8 +28,19 @@ def notify(text):
               "disable_web_page_preview": True}, timeout=10)
     r.raise_for_status()
 
+def diag(r):
+    soup = BeautifulSoup(r.text, "html.parser")
+    rows7 = [tr for tr in soup.select("table tr")
+             if len(tr.find_all("td")) == 7]
+    i = r.text.find("예약현황")
+    snippet = repr(r.text[i:i + 250]) if i >= 0 else "예약현황 없음"
+    return (f"status={r.status_code} len={len(r.text)} url={r.url} "
+            f"tables={len(soup.select('table'))} rows7={len(rows7)} "
+            f"완료={'예약완료' in r.text} 가능={'예약가능' in r.text} "
+            f"snippet={snippet}")
+
 def saturday_slots(seq, year, month):
-    # year/month 파라미터명은 추정값 (3단계에서 확인 필요)
+    # year/month 파라미터명은 추정값
     r = requests.get(DETAIL, headers=HEADERS, timeout=20, params={
         "lending_info_seq": seq, "inst_cate": "01",
         "year": year, "month": month})
@@ -52,8 +63,7 @@ def saturday_slots(seq, year, month):
             if status == "예약가능" and START_MIN <= int(hh) < START_MAX:
                 found.append((d.isoformat(), rng))
     if sats == 0:
-        raise RuntimeError(
-            f"달력 없음 status={r.status_code} len={len(r.text)} head={r.text[:200]!r}")
+        raise RuntimeError("달력 없음 " + diag(r))
     return found
 
 def months_to_check():
@@ -65,11 +75,11 @@ def months_to_check():
     return out
 
 def main():
+    # 진단: 파라미터 없이 기본 요청
     try:
         r0 = requests.get(DETAIL, headers=HEADERS, timeout=20,
                           params={"lending_info_seq": 68, "inst_cate": "01"})
-        print("noparam:", r0.status_code, len(r0.text),
-              "예약완료" in r0.text or "예약가능" in r0.text)
+        print("noparam:", diag(r0))
     except Exception as e:
         print("noparam error:", e)
 
@@ -97,7 +107,7 @@ def main():
         notify("토요일 빈자리 생김!\n" + "\n".join(alerts) + f"\n{LIST_URL}")
     STATE.write_text(json.dumps(new_state, ensure_ascii=False, indent=1))
     if ok == 0:
-        sys.exit(1)      # 전부 실패하면 Actions 실패로 표시 (메일 알림)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
