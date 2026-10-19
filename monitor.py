@@ -11,7 +11,11 @@ LIST_URL = ("https://reserv.bucheon.go.kr/site/main/lending/"
 START_MIN, START_MAX = 6, 12     # 시작 시각 6시 이상 12시 미만
 MONTHS_AHEAD = 1                 # 0=이번 달만, 1=다음 달까지
 STATE = Path("notified.json")
-HEADERS = {"User-Agent": "Mozilla/5.0"}
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml",
+    "Accept-Language": "ko-KR,ko;q=0.9",
+}
 SLOT = re.compile(r"((\d{2}):\d{2}~\d{2}:\d{2})\s*(예약가능|예약완료)")
 
 TG_TOKEN = os.environ["TG_TOKEN"]
@@ -48,7 +52,8 @@ def saturday_slots(seq, year, month):
             if status == "예약가능" and START_MIN <= int(hh) < START_MAX:
                 found.append((d.isoformat(), rng))
     if sats == 0:
-        raise RuntimeError("달력을 찾지 못함 (차단/구조 변경 가능성)")
+        raise RuntimeError(
+            f"달력 없음 status={r.status_code} len={len(r.text)} head={r.text[:200]!r}")
     return found
 
 def months_to_check():
@@ -60,6 +65,14 @@ def months_to_check():
     return out
 
 def main():
+    try:
+        r0 = requests.get(DETAIL, headers=HEADERS, timeout=20,
+                          params={"lending_info_seq": 68, "inst_cate": "01"})
+        print("noparam:", r0.status_code, len(r0.text),
+              "예약완료" in r0.text or "예약가능" in r0.text)
+    except Exception as e:
+        print("noparam error:", e)
+
     old = json.loads(STATE.read_text()) if STATE.exists() else {}
     new_state, alerts, ok = {}, [], 0
     for seq, name in FACILITIES.items():
